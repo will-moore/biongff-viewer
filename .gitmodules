@@ -1,0 +1,3 @@
+[submodule "packages/vizarr"]
+	path = packages/vizarr
+	url = https://github.com/hms-dbmi/vizarr

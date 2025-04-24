@@ -1,0 +1,60 @@
+{
+  "name": "@biongff/biongff-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "author": "BioNGFF",
+  "license": "MIT",
+  "description": "A javascipt viewer for BioNGFF.",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.3",
+    "web-vitals": "^3.5.2"
+  },
+  "scripts": {
+    "start": "serve -s dist",
+    "develop": "vite",
+    "dev": "npm run develop",
+    "build": "NODE_OPTIONS=--max_old_space_size=4096 vite build",
+    "serve": "vite preview",
+    "test": "vitest",
+    "lint-js": "eslint src/**/*.js",
+    "lint-js:fix": "eslint src/**/*.js --fix",
+    "lint-scss": "stylelint src/**/*.scss",
+    "lint-scss:fix": "stylelint src/**/*.scss --fix",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-import-resolver-alias": "^1.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.2.3",
+    "eslint-plugin-react": "^7.33.2",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.5.3",
+    "vite": "^6.2.3",
+    "stylelint": "^16.16.0",
+    "stylelint-config-standard-scss": "^14.0.0",
+    "stylelint-prettier": "^5.0.3",
+    "vitest": "^3.0.8"
+  }
+}

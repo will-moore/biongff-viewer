@@ -1,6 +1,6 @@
 {
-  "short_name": "cellatlas-io-client",
-  "name": "CellAtlas.io Client",
+  "short_name": "biongff-viewer",
+  "name": "bioNGFF Viewer",
   "icons": [
     {
       "src": "favicon.ico",

@@ -37,7 +37,10 @@ export const useSourceData = (config) => {
               series = multiscaleKeys.map((key) => key.split('/')[0]);
             }
             const seriesUrl = `${config.source}${config.source.slice(-1) === '/' ? '' : '/'}${series?.[0] || ''}`;
-            const data = await createSourceData({ source: seriesUrl });
+            const data = await createSourceData({
+              ...config,
+              source: seriesUrl,
+            });
             setSourceData(data);
             return;
           } else {

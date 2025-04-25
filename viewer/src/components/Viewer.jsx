@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 
 import { MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
+import { LabelLayer } from '@hms-dbmi/vizarr/src/layers/label-layer';
 import {
   fitImageToViewport,
   isGridLayerProps,
@@ -13,25 +14,60 @@ import DeckGL, { OrthographicView } from 'deck.gl';
 import { useSourceData } from '../hooks';
 import { Controller } from './Controller';
 
-export const Viewer = ({ source }) => {
+export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   const deckRef = useRef(null);
   const [viewState, setViewState] = useState(null);
-  const [config] = useState({ source: source || null });
+  const [config] = useState({
+    source: source || null,
+    ...(channelAxis ? { channel_axis: parseInt(channelAxis) } : {}),
+  });
 
   const { sourceData, error: sourceError } = useSourceData(config);
 
   const layers = useMemo(() => {
     if (sourceData) {
+      if (isLabel) {
+        // To load standalone label, replicate in source and nest in labels
+        // Needs source ImageLayer, LabelLayer has no loader
+        const layerState = initLayerStateFromSource({
+          id: 'raw',
+          ...sourceData,
+          on: false,
+          labels: [
+            {
+              name: 'labels',
+              modelMatrix: sourceData.model_matrix,
+              loader: sourceData.loader,
+            },
+          ],
+        });
+        return [
+          new MultiscaleImageLayer({
+            ...layerState.layerProps,
+            visible: false,
+          }),
+          new LabelLayer({
+            ...layerState.labels[0].layerProps,
+            selection: layerState.labels[0].transformSourceSelection(
+              layerState.layerProps.selections[0],
+            ),
+          }),
+        ];
+      }
       const layerState = initLayerStateFromSource({ id: 'raw', ...sourceData });
       if (layerState?.layerProps?.loader) {
-        return [new MultiscaleImageLayer(layerState.layerProps)];
+        return [
+          new MultiscaleImageLayer({
+            ...layerState.layerProps,
+          }),
+        ];
       } else {
         return [];
       }
     } else {
       return [];
     }
-  }, [sourceData]);
+  }, [isLabel, sourceData]);
 
   if (deckRef.current?.deck && !viewState && layers?.[0]) {
     const { deck } = deckRef.current;
@@ -67,6 +103,7 @@ export const Viewer = ({ source }) => {
   }
 };
 
+// from vizarr Viewer
 const getLayerSize = ({ props }) => {
   const loader = resolveLoaderFromLayerProps(props);
   const [baseResolution, maxZoom] = Array.isArray(loader)

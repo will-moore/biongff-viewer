@@ -2,7 +2,6 @@ import React, { useMemo, useRef, useState } from 'react';
 
 import { MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
-import { LabelLayer } from '@hms-dbmi/vizarr/src/layers/label-layer';
 import {
   fitImageToViewport,
   isGridLayerProps,
@@ -13,6 +12,7 @@ import DeckGL, { OrthographicView } from 'deck.gl';
 
 import { useSourceData } from '../hooks';
 import { Controller } from './Controller';
+import { LabelLayer } from '../layers/label-layer';
 
 export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   const deckRef = useRef(null);
@@ -51,6 +51,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
             selection: layerState.labels[0].transformSourceSelection(
               layerState.layerProps.selections[0],
             ),
+            pickable: true,
           }),
         ];
       }
@@ -81,6 +82,15 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     );
   }
 
+  const getTooltip = ({ layer, index, value }) => {
+    if (!layer || !index) {
+      return null;
+    }
+    return {
+      text: value,
+    };
+  };
+
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -97,6 +107,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           viewState={viewState && { ortho: viewState }}
           onViewStateChange={(e) => setViewState(e.viewState)}
           views={[new OrthographicView({ id: 'ortho', controller: true })]}
+          getTooltip={getTooltip}
         />
       </div>
     );

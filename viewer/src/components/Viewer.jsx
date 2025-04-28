@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 
 import { MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
@@ -70,7 +70,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     }
   }, [isLabel, sourceData]);
 
-  if (deckRef.current?.deck && !viewState && layers?.[0]) {
+  const resetViewState = useCallback(() => {
     const { deck } = deckRef.current;
     setViewState(
       fitImageToViewport({
@@ -80,6 +80,10 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
         matrix: layers[0].props.modelMatrix,
       }),
     );
+  }, [layers]);
+
+  if (deckRef.current?.deck && !viewState && layers?.[0]) {
+    resetViewState();
   }
 
   const getTooltip = ({ layer, index, value }) => {
@@ -100,7 +104,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   } else {
     return (
       <div>
-        <Controller layers={layers} />
+        <Controller layers={layers} resetViewState={resetViewState} />
         <DeckGL
           ref={deckRef}
           layers={layers}

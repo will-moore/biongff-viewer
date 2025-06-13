@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const Controller = ({ layers }) => {
+export const Controller = ({ layers, resetViewState }) => {
   return (
     <div className="viewer-controller">
       <p>Layers</p>
@@ -9,6 +9,9 @@ export const Controller = ({ layers }) => {
           return <li key={layer.props.id}>{layer.props.id}</li>;
         })}
       </ul>
+      <button type="button" className="btn" onClick={resetViewState}>
+        Reset
+      </button>
     </div>
   );
 };

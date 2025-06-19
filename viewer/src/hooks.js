@@ -12,49 +12,62 @@ export const useSourceData = (config) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const metadataUrl = `${config.source}${config.source.slice(-1) === '/' ? '' : '/'}.zmetadata`;
-        const { metadata } = await (await fetch(metadataUrl)).json();
+        const base = config.source;
+        const metadataUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}.zmetadata`;
 
-        if ('.zattrs' in metadata) {
-          const store = new FetchStore(config.source);
-          const node = await open(store, { kind: 'group' });
+        let metadata = null;
+        let useMetadataFile = false;
 
-          if (isBioformats2Raw(node)) {
-            // https://ngff.openmicroscopy.org/0.4/#bf2raw-details
-            if (node.attrs['bioformats2raw.layout'] !== 3) {
-              setError(new Error('Unsupported bioformats2raw layout'));
-              return;
-            }
-            let series;
-            if ('OME/.zattrs' in metadata) {
-              const ome = await open(node.resolve('OME'), { kind: 'group' });
-              series = ome.attrs.series;
-            } else {
-              const multiscaleKeys = Object.keys(metadata).filter(
-                (key) =>
-                  key.endsWith('/.zattrs') && 'multiscales' in metadata[key],
-              );
-              series = multiscaleKeys.map((key) => key.split('/')[0]);
-            }
-            const seriesUrl = `${config.source}${config.source.slice(-1) === '/' ? '' : '/'}${series?.[0] || ''}`;
-            const data = await createSourceData({
-              ...config,
-              source: seriesUrl,
-            });
-            setSourceData(data);
-            return;
-          } else {
-            const data = await createSourceData(config);
-            setSourceData(data);
+        try {
+          const response = await fetch(metadataUrl);
+          if (
+            response.ok &&
+            response.headers.get('content-type')?.includes('application/json')
+          ) {
+            const json = await response.json();
+            metadata = json.metadata;
+            useMetadataFile = true;
+          }
+        } catch (e) {
+          console.warn(
+            'No .zmetadata file found, falling back to opening store directly',
+          );
+        }
+
+        const store = new FetchStore(base);
+        const node = await open(store, { kind: 'group' });
+
+        if (isBioformats2Raw(node)) {
+          if (node.attrs['bioformats2raw.layout'] !== 3) {
+            setError(new Error('Unsupported bioformats2raw layout'));
             return;
           }
+          let series;
+          if (useMetadataFile && metadata && 'OME/.zattrs' in metadata) {
+            const ome = await open(node.resolve('OME'), { kind: 'group' });
+            series = ome.attrs.series;
+          } else {
+            const ome = await open(node.resolve('OME'), { kind: 'group' });
+            series = ome.attrs?.series || ['0'];
+          }
+
+          const seriesUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}${series?.[0] || ''}`;
+          const data = await createSourceData({
+            ...config,
+            source: seriesUrl,
+          });
+          setSourceData(data);
+          return;
+        } else {
+          const data = await createSourceData(config);
+          setSourceData(data);
+          return;
         }
-        setSourceData(null);
-        setError(new Error('No attrs found in metadata'));
       } catch (err) {
         setError(err);
       }
     };
+
     if (!config?.source) {
       setSourceData(null);
       setError(new Error('No source provided'));

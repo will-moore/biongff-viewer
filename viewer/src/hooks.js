@@ -16,17 +16,13 @@ export const useSourceData = (config) => {
         const metadataUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}.zmetadata`;
 
         let metadata = null;
-        let useMetadataFile = false;
-
         try {
           const response = await fetch(metadataUrl);
           if (
             response.ok &&
             response.headers.get('content-type')?.includes('application/json')
           ) {
-            const json = await response.json();
-            metadata = json.metadata;
-            useMetadataFile = true;
+            metadata = await response.json().metadata;
           }
         } catch (e) {
           console.warn(
@@ -38,14 +34,23 @@ export const useSourceData = (config) => {
         const node = await open(store, { kind: 'group' });
 
         if (isBioformats2Raw(node)) {
+          // https://ngff.openmicroscopy.org/0.4/#bf2raw-details
           if (node.attrs['bioformats2raw.layout'] !== 3) {
             setError(new Error('Unsupported bioformats2raw layout'));
             return;
           }
           let series;
-          if (useMetadataFile && metadata && 'OME/.zattrs' in metadata) {
-            const ome = await open(node.resolve('OME'), { kind: 'group' });
-            series = ome.attrs.series;
+          if (metadata) {
+            if ('OME/.zattrs' in metadata) {
+              const ome = await open(node.resolve('OME'), { kind: 'group' });
+              series = ome.attrs.series;
+            } else {
+              const multiscaleKeys = Object.keys(metadata).filter(
+                (key) =>
+                  key.endsWith('/.zattrs') && 'multiscales' in metadata[key],
+              );
+              series = multiscaleKeys.map((key) => key.split('/')[0]);
+            }
           } else {
             const ome = await open(node.resolve('OME'), { kind: 'group' });
             series = ome.attrs?.series || ['0'];

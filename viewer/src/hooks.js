@@ -7,6 +7,8 @@ import {
 } from '@hms-dbmi/vizarr/src/utils';
 import { FetchStore, open } from 'zarrita';
 
+import { findSeries, getZarrJson, getZarrMetadata } from './utils';
+
 export const useSourceData = (config) => {
   const [sourceData, setSourceData] = useState(null);
   const [error, setError] = useState(null);
@@ -25,12 +27,7 @@ export const useSourceData = (config) => {
           node = await open.v2(store, { kind: 'group' });
         }
 
-        const jsonUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}zarr.json`;
-        let zarrJson;
-        try {
-          zarrJson = await (await fetch(jsonUrl)).json();
-        } catch {}
-
+        const zarrJson = await getZarrJson(base);
         let ome = zarrJson?.attributes?.ome || node.attrs?.OME || null;
 
         if (!isBioformats2rawlayout(ome || node.attrs)) {
@@ -42,6 +39,8 @@ export const useSourceData = (config) => {
 
         // load bioformats2raw.layout
         // https://ngff.openmicroscopy.org/0.4/#bf2raw
+
+        // get b2f metadata from ome key in metadata or node attributes
         const b2fl =
           ome?.['bioformats2raw.layout'] ||
           node.attrs?.['bioformats2raw.layout'];
@@ -51,13 +50,9 @@ export const useSourceData = (config) => {
         }
 
         // Try to load .zmetadata if present
-        const metadataUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}.zmetadata`;
-        let metadata;
-        try {
-          metadata = (await (await fetch(metadataUrl)).json()).metadata;
-        } catch {}
+        const metadata = await getZarrMetadata(base);
 
-        // Try to load OME group at root if present
+        // Try to load OME group at root if present and not in v3 zarr metadata
         if (!ome) {
           try {
             ome = await open(node.resolve('OME'), { kind: 'group' });
@@ -82,38 +77,12 @@ export const useSourceData = (config) => {
             console.warn(
               'No OME group or .zmetadata file. Attempting to find series.',
             );
-            // separate "multiscales" images MUST be stored in consecutively numbered groups starting from 0
-            let s = 0;
-            series = [];
-            while (true) {
-              let seriesNode;
-              try {
-                seriesNode = await open(node.resolve(`${s}`), {
-                  kind: 'group',
-                });
-              } catch {}
-              if (seriesNode) {
-                let attrs;
-                if (zarrVersion === 3) {
-                  const metadataUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}${s}/zarr.json`;
-                  try {
-                    attrs = (await (await fetch(metadataUrl)).json())
-                      ?.attributes?.ome;
-                  } catch {}
-                } else {
-                  attrs = seriesNode.attrs;
-                }
-                if (attrs?.['multiscales']) {
-                  series.push(`${s}`);
-                } else break;
-                s++;
-              } else break;
-            }
+            series = await findSeries(base, node, zarrVersion);
           }
         }
 
         // @TODO: return all series
-        const seriesUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}${series?.[0] || ''}`;
+        const seriesUrl = `${base.replace(/\/?$/, '/')}${series?.[0] || ''}`;
         const data = await createSourceData({
           ...config,
           source: seriesUrl,

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
 
-import { MultiscaleImageLayer } from '@hms-dbmi/viv';
+import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
 import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
@@ -15,6 +15,12 @@ import { useSourceData } from '../hooks';
 import { Controller } from './Controller';
 import { LabelLayer } from '../layers/label-layer';
 
+const LayerStateMap = {
+  image: ImageLayer,
+  grid: GridLayer,
+  multiscale: MultiscaleImageLayer,
+};
+
 export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   const deckRef = useRef(null);
   const [viewState, setViewState] = useState(null);
@@ -27,19 +33,6 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
 
   const layers = useMemo(() => {
     if (sourceData) {
-      if (isGridLayerProps(sourceData)) {
-        const layerState = initLayerStateFromSource({
-          id: 'raw',
-          ...sourceData,
-        });
-
-        return [
-          new GridLayer({
-            ...layerState.layerProps,
-          }),
-        ];
-      }
-
       if (isLabel) {
         // To load standalone label, replicate in source and nest in labels
         // Needs source ImageLayer, LabelLayer has no loader
@@ -72,7 +65,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
       const layerState = initLayerStateFromSource({ id: 'raw', ...sourceData });
       if (layerState?.layerProps?.loader) {
         return [
-          new MultiscaleImageLayer({
+          new LayerStateMap[layerState.kind]({
             ...layerState.layerProps,
           }),
         ];

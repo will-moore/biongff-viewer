@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 
 import { createSourceData } from '@hms-dbmi/vizarr/src/io';
-import { isBioformats2rawlayout } from '@hms-dbmi/vizarr/src/utils';
+import {
+  isBioformats2rawlayout,
+  guessZarrVersion,
+} from '@hms-dbmi/vizarr/src/utils';
 import { FetchStore, open } from 'zarrita';
 
 export const useSourceData = (config) => {
@@ -14,9 +17,23 @@ export const useSourceData = (config) => {
         const base = config.source;
 
         const store = new FetchStore(base);
-        const node = await open(store, { kind: 'group' });
+        let zarrVersion = await guessZarrVersion(store);
+        let node;
+        if (zarrVersion === 3) {
+          node = await open.v3(store, { kind: 'group' });
+        } else {
+          node = await open.v2(store, { kind: 'group' });
+        }
 
-        if (!isBioformats2rawlayout(node.attrs)) {
+        const jsonUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}zarr.json`;
+        let zarrJson;
+        try {
+          zarrJson = await (await fetch(jsonUrl)).json();
+        } catch {}
+
+        let ome = zarrJson?.attributes?.ome || node.attrs?.OME || null;
+
+        if (!isBioformats2rawlayout(ome || node.attrs)) {
           // use Vizarr's createSourceData with source as is
           const data = await createSourceData(config);
           setSourceData(data);
@@ -25,7 +42,10 @@ export const useSourceData = (config) => {
 
         // load bioformats2raw.layout
         // https://ngff.openmicroscopy.org/0.4/#bf2raw
-        if (node.attrs['bioformats2raw.layout'] !== 3) {
+        const b2fl =
+          ome?.['bioformats2raw.layout'] ||
+          node.attrs?.['bioformats2raw.layout'];
+        if (b2fl !== 3) {
           setError(new Error('Unsupported bioformats2raw layout'));
           return;
         }
@@ -38,14 +58,17 @@ export const useSourceData = (config) => {
         } catch {}
 
         // Try to load OME group at root if present
-        let ome;
-        try {
-          ome = await open(node.resolve('OME'), { kind: 'group' });
-        } catch {}
+        if (!ome) {
+          try {
+            ome = await open(node.resolve('OME'), { kind: 'group' });
+          } catch {}
+        }
 
         // @TODO: add plates
         let series;
-        if (ome?.attrs?.series) {
+        if (ome?.series) {
+          series = ome.series;
+        } else if (ome?.attrs?.series) {
           series = ome.attrs.series;
         } else {
           // https://ngff.openmicroscopy.org/0.4/#bf2raw-details
@@ -69,12 +92,22 @@ export const useSourceData = (config) => {
                   kind: 'group',
                 });
               } catch {}
-              if (seriesNode && seriesNode.attrs?.['multiscales']) {
-                series.push(`${s}`);
+              if (seriesNode) {
+                let attrs;
+                if (zarrVersion === 3) {
+                  const metadataUrl = `${base}${base.slice(-1) === '/' ? '' : '/'}${s}/zarr.json`;
+                  try {
+                    attrs = (await (await fetch(metadataUrl)).json())
+                      ?.attributes?.ome;
+                  } catch {}
+                } else {
+                  attrs = seriesNode.attrs;
+                }
+                if (attrs?.['multiscales']) {
+                  series.push(`${s}`);
+                } else break;
                 s++;
-              } else {
-                break;
-              }
+              } else break;
             }
           }
         }

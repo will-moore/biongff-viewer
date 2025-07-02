@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState, useCallback } from 'react';
 
 import { MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
+import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
   fitImageToViewport,
   isGridLayerProps,
@@ -26,6 +27,19 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
 
   const layers = useMemo(() => {
     if (sourceData) {
+      if (isGridLayerProps(sourceData)) {
+        const layerState = initLayerStateFromSource({
+          id: 'raw',
+          ...sourceData,
+        });
+
+        return [
+          new GridLayer({
+            ...layerState.layerProps,
+          }),
+        ];
+      }
+
       if (isLabel) {
         // To load standalone label, replicate in source and nest in labels
         // Needs source ImageLayer, LabelLayer has no loader

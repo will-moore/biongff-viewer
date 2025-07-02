@@ -68,6 +68,17 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           new LayerStateMap[layerState.kind]({
             ...layerState.layerProps,
           }),
+          ...(layerState.labels?.length
+            ? layerState.labels?.map((label) => {
+                return new LabelLayer({
+                  ...label.layerProps,
+                  selection: layerState.labels[0].transformSourceSelection(
+                    layerState.layerProps.selections[0],
+                  ),
+                  pickable: true,
+                });
+              })
+            : []),
         ];
       } else {
         return [];

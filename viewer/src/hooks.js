@@ -60,6 +60,7 @@ export const useSourceData = (config) => {
         }
 
         // @TODO: add plates
+        // @TODO: use OME/METADATA.ome.XML (https://github.com/ome/ome-ngff-validator/blob/d29a48d930b68c21f2ee931ef0f681f695e70d1a/src/Bioformats2rawLayout/index.svelte#L70)
         let series;
         if (ome?.series) {
           series = ome.series;

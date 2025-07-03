@@ -72,7 +72,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
         ...sourceData,
         model_matrix: modelMatrix,
       });
-      if (layerState?.layerProps?.loader) {
+      if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
         return [
           new LayerStateMap[layerState.kind]({
             ...layerState.layerProps,

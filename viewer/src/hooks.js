@@ -4,6 +4,7 @@ import { createSourceData } from '@hms-dbmi/vizarr/src/io';
 import {
   isBioformats2rawlayout,
   guessZarrVersion,
+  isOmePlate,
 } from '@hms-dbmi/vizarr/src/utils';
 import { FetchStore, open } from 'zarrita';
 
@@ -30,7 +31,10 @@ export const useSourceData = (config) => {
         const zarrJson = zarrVersion === 3 ? await getZarrJson(base) : null;
         let ome = zarrJson?.attributes?.ome || node.attrs?.OME || null;
 
-        if (!isBioformats2rawlayout(ome || node.attrs)) {
+        if (
+          !isBioformats2rawlayout(ome || node.attrs) ||
+          isOmePlate(ome || {})
+        ) {
           // use Vizarr's createSourceData with source as is
           const data = await createSourceData(config);
           setSourceData(data);

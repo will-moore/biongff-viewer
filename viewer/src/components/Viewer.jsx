@@ -67,6 +67,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
         return [
           new LayerStateMap[layerState.kind]({
             ...layerState.layerProps,
+            pickable: false,
           }),
           ...(layerState.labels?.length
             ? layerState.labels?.map((label) => {

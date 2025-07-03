@@ -27,7 +27,7 @@ export const useSourceData = (config) => {
           node = await open.v2(store, { kind: 'group' });
         }
 
-        const zarrJson = await getZarrJson(base);
+        const zarrJson = zarrVersion === 3 ? await getZarrJson(base) : null;
         let ome = zarrJson?.attributes?.ome || node.attrs?.OME || null;
 
         if (!isBioformats2rawlayout(ome || node.attrs)) {

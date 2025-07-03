@@ -10,6 +10,7 @@ import {
   resolveLoaderFromLayerProps,
 } from '@hms-dbmi/vizarr/src/utils';
 import DeckGL, { OrthographicView } from 'deck.gl';
+import { Matrix4 } from 'math.gl';
 
 import { useSourceData } from '../hooks';
 import { Controller } from './Controller';
@@ -62,7 +63,15 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           }),
         ];
       }
-      const layerState = initLayerStateFromSource({ id: 'raw', ...sourceData });
+      // Enforce identity matrix for labels to work
+      const modelMatrix = !!sourceData.labels?.length
+        ? new Matrix4().identity()
+        : sourceData.model_matrix;
+      const layerState = initLayerStateFromSource({
+        id: 'raw',
+        ...sourceData,
+        model_matrix: modelMatrix,
+      });
       if (layerState?.layerProps?.loader) {
         return [
           new LayerStateMap[layerState.kind]({
@@ -73,6 +82,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
             ? layerState.labels?.map((label) => {
                 return new LabelLayer({
                   ...label.layerProps,
+                  modelMatrix: layerState.layerProps.modelMatrix,
                   selection: layerState.labels[0].transformSourceSelection(
                     layerState.layerProps.selections[0],
                   ),

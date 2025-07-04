@@ -101,7 +101,7 @@ export const useSourceData = (config) => {
             const seriesNode = await open(node.resolve(s), {
               kind: 'group',
             });
-            if (!seriesNode.attrs.multiscales[0].axes && omeXml) {
+            if (!seriesNode.attrs.multiscales?.[0].axes && omeXml) {
               // get axes from xml if not in metadata
               // "The specified dimension order is then reversed when creating Zarr arrays, e.g. XYCZT would become TZCYX in Zarr." (https://github.com/glencoesoftware/bioformats2raw/blob/85ef84db26ce1239dd71ef482b4f38f67e605491/README.md?plain=1#L293)
               // though multiscales metadata MUST have axes (https://ngff.openmicroscopy.org/0.4/#multiscale-md)

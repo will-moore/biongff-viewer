@@ -74,6 +74,7 @@ export class LabelLayer extends TileLayer {
       opacity: opacity,
       maxZoom: 0,
       modelMatrix: modelMatrix,
+      colors: colors,
       zoomOffset: Math.round(
         Math.log2(modelMatrix ? modelMatrix.getScale()[0] : 1),
       ),

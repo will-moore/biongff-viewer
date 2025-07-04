@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
 
-import { MultiscaleImageLayer } from '@hms-dbmi/viv';
+import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
+import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
   fitImageToViewport,
   isGridLayerProps,
@@ -9,10 +10,17 @@ import {
   resolveLoaderFromLayerProps,
 } from '@hms-dbmi/vizarr/src/utils';
 import DeckGL, { OrthographicView } from 'deck.gl';
+import { Matrix4 } from 'math.gl';
 
 import { useSourceData } from '../hooks';
 import { Controller } from './Controller';
 import { LabelLayer } from '../layers/label-layer';
+
+const LayerStateMap = {
+  image: ImageLayer,
+  grid: GridLayer,
+  multiscale: MultiscaleImageLayer,
+};
 
 export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   const deckRef = useRef(null);
@@ -55,12 +63,33 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           }),
         ];
       }
-      const layerState = initLayerStateFromSource({ id: 'raw', ...sourceData });
-      if (layerState?.layerProps?.loader) {
+      // Enforce identity matrix for labels to work
+      const modelMatrix = !!sourceData.labels?.length
+        ? new Matrix4().identity()
+        : sourceData.model_matrix;
+      const layerState = initLayerStateFromSource({
+        id: 'raw',
+        ...sourceData,
+        model_matrix: modelMatrix,
+      });
+      if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
         return [
-          new MultiscaleImageLayer({
+          new LayerStateMap[layerState.kind]({
             ...layerState.layerProps,
+            pickable: false,
           }),
+          ...(layerState.labels?.length
+            ? layerState.labels?.map((label) => {
+                return new LabelLayer({
+                  ...label.layerProps,
+                  modelMatrix: layerState.layerProps.modelMatrix,
+                  selection: layerState.labels[0].transformSourceSelection(
+                    layerState.layerProps.selections[0],
+                  ),
+                  pickable: true,
+                });
+              })
+            : []),
         ];
       } else {
         return [];

@@ -8,7 +8,13 @@ import {
 } from '@hms-dbmi/vizarr/src/utils';
 import { FetchStore, open } from 'zarrita';
 
-import { findSeries, getZarrJson, getZarrMetadata } from './utils';
+import {
+  findSeries,
+  getXmlDom,
+  getZarrJson,
+  getZarrMetadata,
+  parseXml,
+} from './utils';
 
 export const useSourceData = (config) => {
   const [sourceData, setSourceData] = useState(null);
@@ -33,7 +39,7 @@ export const useSourceData = (config) => {
 
         if (
           !isBioformats2rawlayout(ome || node.attrs) ||
-          isOmePlate(ome || {})
+          isOmePlate(ome || {}) // if plate is present it takes precedence (https://ngff.openmicroscopy.org/0.4/#bf2raw-attributes)
         ) {
           // use Vizarr's createSourceData with source as is
           const data = await createSourceData(config);
@@ -63,8 +69,10 @@ export const useSourceData = (config) => {
           } catch {}
         }
 
-        // @TODO: add plates
-        // @TODO: use OME/METADATA.ome.XML (https://github.com/ome/ome-ngff-validator/blob/d29a48d930b68c21f2ee931ef0f681f695e70d1a/src/Bioformats2rawLayout/index.svelte#L70)
+        // Try to load OME XML file if present
+        const omeXmlDom = await getXmlDom(base);
+        let omeXml = omeXmlDom ? parseXml(omeXmlDom) : null;
+
         let series;
         if (ome?.series) {
           series = ome.series;
@@ -78,19 +86,45 @@ export const useSourceData = (config) => {
                 key.endsWith('/.zattrs') && 'multiscales' in metadata[key],
             );
             series = multiscaleKeys.map((key) => key.split('/')[0]);
+          } else if (omeXml) {
+            series = omeXml.images.map((image) => image.path);
           } else {
             console.warn(
-              'No OME group or .zmetadata file. Attempting to find series.',
+              'No OME group, .zmetadata or xml file. Attempting to find series.',
             );
             series = await findSeries(base, node, zarrVersion);
           }
         }
 
+        const seriesMd = await Promise.all(
+          series?.map(async (s, index) => {
+            const seriesNode = await open(node.resolve(s), {
+              kind: 'group',
+            });
+            if (!seriesNode.attrs.multiscales?.[0].axes && omeXml) {
+              // get axes from xml if not in metadata
+              // "The specified dimension order is then reversed when creating Zarr arrays, e.g. XYCZT would become TZCYX in Zarr." (https://github.com/glencoesoftware/bioformats2raw/blob/85ef84db26ce1239dd71ef482b4f38f67e605491/README.md?plain=1#L293)
+              // though multiscales metadata MUST have axes (https://ngff.openmicroscopy.org/0.4/#multiscale-md)
+              const dimensionOrder = omeXml.images[index].dimensionOrder;
+              return dimensionOrder
+                ? {
+                    channel_axis:
+                      dimensionOrder?.length - dimensionOrder?.indexOf('C') - 1,
+                  }
+                : {};
+            }
+            return {};
+          }),
+        );
+
         // @TODO: return all series
-        const seriesUrl = `${base.replace(/\/?$/, '/')}${series?.[0] || ''}`;
+        const sIndex = 0;
+
+        const seriesUrl = `${base.replace(/\/?$/, '/')}${series?.[sIndex] || ''}`;
         const data = await createSourceData({
           ...config,
           source: seriesUrl,
+          ...seriesMd[sIndex],
         });
         setSourceData(data);
         return;

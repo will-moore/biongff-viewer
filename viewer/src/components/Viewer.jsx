@@ -63,7 +63,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           }),
         ];
       }
-      // Enforce identity matrix for labels to work
+      // Enforce identity matrix for labels picking to work
       const modelMatrix = !!sourceData.labels?.length
         ? new Matrix4().identity()
         : sourceData.model_matrix;

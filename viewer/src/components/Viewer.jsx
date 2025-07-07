@@ -1,4 +1,10 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
+import React, {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react';
 
 import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
@@ -31,73 +37,88 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   });
 
   const { sourceData, error: sourceError } = useSourceData(config);
+  const [layerState, setLayerState] = useState(null);
 
-  const layers = useMemo(() => {
+  useEffect(() => {
     if (sourceData) {
       if (isLabel) {
         // To load standalone label, replicate in source and nest in labels
         // Needs source ImageLayer, LabelLayer has no loader
-        const layerState = initLayerStateFromSource({
-          id: 'raw',
-          ...sourceData,
-          on: false,
-          labels: [
-            {
-              name: 'labels',
-              modelMatrix: sourceData.model_matrix,
-              loader: sourceData.loader,
-            },
-          ],
+        setLayerState({
+          ...initLayerStateFromSource({
+            id: 'raw',
+            ...sourceData,
+            labels: [
+              {
+                name: 'labels',
+                modelMatrix: sourceData.model_matrix,
+                loader: sourceData.loader,
+              },
+            ],
+          }),
         });
-        return [
-          new MultiscaleImageLayer({
-            ...layerState.layerProps,
-            visible: false,
-          }),
-          new LabelLayer({
-            ...layerState.labels[0].layerProps,
-            selection: layerState.labels[0].transformSourceSelection(
-              layerState.layerProps.selections[0],
-            ),
-            pickable: true,
-          }),
-        ];
+        return;
       }
       // Enforce identity matrix for labels picking to work
       const modelMatrix = !!sourceData.labels?.length
         ? new Matrix4().identity()
         : sourceData.model_matrix;
-      const layerState = initLayerStateFromSource({
-        id: 'raw',
-        ...sourceData,
-        model_matrix: modelMatrix,
-      });
-      if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
-        return [
-          new LayerStateMap[layerState.kind]({
-            ...layerState.layerProps,
-            pickable: false,
-          }),
-          ...(layerState.labels?.length
-            ? layerState.labels?.map((label) => {
-                return new LabelLayer({
-                  ...label.layerProps,
-                  modelMatrix: layerState.layerProps.modelMatrix,
-                  selection: layerState.labels[0].transformSourceSelection(
-                    layerState.layerProps.selections[0],
-                  ),
-                  pickable: true,
-                });
-              })
-            : []),
-        ];
-      } else {
-        return [];
-      }
-    } else {
-      return [];
+      setLayerState(
+        initLayerStateFromSource({
+          id: 'raw',
+          ...sourceData,
+          model_matrix: modelMatrix,
+        }),
+      );
     }
   }, [isLabel, sourceData]);
+
+  const layers = useMemo(() => {
+    if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
+      const { on } = layerState;
+      if (isLabel) {
+        // @TODO: fix how controller lists layers
+        return [
+          new MultiscaleImageLayer({
+            ...layerState.layerProps,
+            visible: false,
+          }),
+          on
+            ? new LabelLayer({
+                ...layerState.labels[0].layerProps,
+                selection: layerState.labels[0].transformSourceSelection(
+                  layerState.layerProps.selections[0],
+                ),
+                pickable: true,
+              })
+            : null,
+        ];
+      }
+      return [
+        new LayerStateMap[layerState.kind]({
+          ...layerState.layerProps,
+          visible: on, // @TODO: fix lower resolution image visible when image is toggled off
+          pickable: false,
+        }),
+        ...(layerState.labels?.length
+          ? layerState.labels?.map((label) => {
+              const { on: labelOn } = label;
+              return labelOn
+                ? new LabelLayer({
+                    ...label.layerProps,
+                    modelMatrix: layerState.layerProps.modelMatrix,
+                    selection: layerState.labels[0].transformSourceSelection(
+                      layerState.layerProps.selections[0],
+                    ),
+                    pickable: true,
+                  })
+                : null;
+            })
+          : []),
+      ];
+    }
+    return [];
+  }, [isLabel, layerState]);
 
   const resetViewState = useCallback(() => {
     const { deck } = deckRef.current;
@@ -124,6 +145,28 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     };
   };
 
+  const toggleVisibility = (label = null) => {
+    if (!label) {
+      setLayerState((prev) => ({
+        ...prev,
+        on: !prev.on,
+      }));
+    } else {
+      setLayerState((prev) => ({
+        ...prev,
+        labels: prev.labels.map((l) => {
+          if (l.layerProps.id === label) {
+            return {
+              ...l,
+              on: !l.on,
+            };
+          }
+          return l;
+        }),
+      }));
+    }
+  };
+
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -133,7 +176,11 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   } else {
     return (
       <div>
-        <Controller layers={layers} resetViewState={resetViewState} />
+        <Controller
+          layerState={layerState}
+          resetViewState={resetViewState}
+          toggleVisibility={toggleVisibility}
+        />
         <DeckGL
           ref={deckRef}
           layers={layers}

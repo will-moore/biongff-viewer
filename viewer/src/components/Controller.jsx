@@ -19,6 +19,7 @@ export const Controller = ({
   toggleVisibility,
   rotate90,
   translate,
+  setIdentityMatrix,
 }) => {
   if (!layerState) {
     return <></>;
@@ -60,7 +61,10 @@ export const Controller = ({
           ))}
         </FormGroup>
         <button type="button" className="btn" onClick={resetViewState}>
-          Reset
+          Reset view
+        </button>
+        <button type="button" className="btn" onClick={setIdentityMatrix}>
+          Reset matrix
         </button>
         <Stack direction="row" spacing={2}>
           <button type="button" className="btn">

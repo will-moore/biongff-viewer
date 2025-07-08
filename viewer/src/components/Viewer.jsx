@@ -124,7 +124,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     const { deck } = deckRef.current;
     setViewState(
       fitImageToViewport({
-        image: getLayerSize(layers[0]),
+        image: getLayerSize(layers[0]), // @TODO: fix with model matrix
         viewport: deck,
         padding: deck.width < 400 ? 10 : deck.width < 600 ? 30 : 50,
         matrix: layers[0].props.modelMatrix,
@@ -201,6 +201,18 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     });
   };
 
+  const setIdentityMatrix = () => {
+    setLayerState((prev) => {
+      return {
+        ...prev,
+        layerProps: {
+          ...prev.layerProps,
+          modelMatrix: new Matrix4().identity(),
+        },
+      };
+    });
+  };
+
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -216,6 +228,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           toggleVisibility={toggleVisibility}
           rotate90={rotate90}
           translate={translate}
+          setIdentityMatrix={setIdentityMatrix}
         />
         <div className="viewer-matrix">
           {layers?.[0]?.props.modelMatrix

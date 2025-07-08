@@ -82,9 +82,9 @@ export class LabelLayer extends TileLayer {
         Math.log2(modelMatrix ? modelMatrix.getScale()[0] : 1),
       ),
       updateTriggers: {
-        getTileData: [loader, selection, modelMatrix],
+        getTileData: [loader, selection],
       },
-      async getTileData({ index, signal, bbox }) {
+      async getTileData({ index, signal }) {
         const { x, y, z } = index;
         const resolution = resolutions[Math.round(-z)];
         const request = { x, y, signal, selection: selection };

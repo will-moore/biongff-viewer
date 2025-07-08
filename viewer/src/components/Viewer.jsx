@@ -167,6 +167,40 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     }
   };
 
+  const rotate90 = (ccw = false) => {
+    const { height, width } = getLayerSize(layers[0]);
+    const center = [width / 2, height / 2, 0];
+    setLayerState((prev) => {
+      const rotatedMatrix = prev.layerProps.modelMatrix
+        .clone()
+        .translate(center)
+        .rotateZ((Math.PI / 2) * (ccw ? -1 : 1))
+        .translate(center.map((c) => -c));
+      return {
+        ...prev,
+        layerProps: {
+          ...prev.layerProps,
+          modelMatrix: rotatedMatrix,
+        },
+      };
+    });
+  };
+
+  const translate = (x, y) => {
+    setLayerState((prev) => {
+      const translatedMatrix = prev.layerProps.modelMatrix
+        .clone()
+        .translate([x, y, 0]);
+      return {
+        ...prev,
+        layerProps: {
+          ...prev.layerProps,
+          modelMatrix: translatedMatrix,
+        },
+      };
+    });
+  };
+
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -180,7 +214,14 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           layerState={layerState}
           resetViewState={resetViewState}
           toggleVisibility={toggleVisibility}
+          rotate90={rotate90}
+          translate={translate}
         />
+        <div className="viewer-matrix">
+          {layers?.[0]?.props.modelMatrix
+            ? `[${layers[0].props.modelMatrix.join(', ')}]`
+            : ''}
+        </div>
         <DeckGL
           ref={deckRef}
           layers={layers}

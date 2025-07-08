@@ -1,7 +1,7 @@
 import { GrayscaleBitmapLayer as VizarrGrayscaleBitmapLayer } from '@hms-dbmi/vizarr/src/layers/label-layer';
 import * as utils from '@hms-dbmi/vizarr/src/utils';
 import { TileLayer } from 'deck.gl';
-import { clamp } from 'math.gl';
+import { clamp, Matrix4 } from 'math.gl';
 
 class GrayscaleBitmapLayer extends VizarrGrayscaleBitmapLayer {
   static layerName = 'GrayscaleBitmapLayer';
@@ -13,7 +13,10 @@ class GrayscaleBitmapLayer extends VizarrGrayscaleBitmapLayer {
     }
     const { pixelData, bounds } = this.props;
     const { data, width, height } = pixelData;
-    const [x, y] = info.coordinate;
+    let [x, y] = info.coordinate;
+    if (!Matrix4.IDENTITY.equals(info.layer.props.modelMatrix)) {
+      [x, y] = info.layer.props.modelMatrix.invert().transformPoint([x, y]);
+    }
     const [left, bottom, right, top] = bounds;
 
     if (right - left === 0 || top - bottom === 0) {
@@ -79,9 +82,9 @@ export class LabelLayer extends TileLayer {
         Math.log2(modelMatrix ? modelMatrix.getScale()[0] : 1),
       ),
       updateTriggers: {
-        getTileData: [loader, selection],
+        getTileData: [loader, selection, modelMatrix],
       },
-      async getTileData({ index, signal }) {
+      async getTileData({ index, signal, bbox }) {
         const { x, y, z } = index;
         const resolution = resolutions[Math.round(-z)];
         const request = { x, y, signal, selection: selection };
@@ -102,7 +105,11 @@ export class LabelLayer extends TileLayer {
     const { tile, data, pickable = false, ...props } = params;
     const [[left, bottom], [right, top]] = tile.boundingBox;
     utils.assert(props.extent, 'missing extent');
-    const [, , width, height] = props.extent;
+    const [minX, minY, width, height] = props.extent;
+    if (right <= minX || left >= width || top <= minY || bottom >= height) {
+      // Tile is outside the extent, skip rendering
+      return null;
+    }
     return new GrayscaleBitmapLayer({
       id: `tile-${tile.index.x}.${tile.index.y}.${tile.index.z}-${props.id}`,
       pixelData: data,

@@ -10,7 +10,6 @@ import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
 import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
-  fitImageToViewport,
   isGridLayerProps,
   isInterleaved,
   resolveLoaderFromLayerProps,
@@ -125,10 +124,10 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     const { deck } = deckRef.current;
     setViewState(
       fitImageToViewport({
-        image: getLayerSize(layers[0]), // @TODO: fix with model matrix
+        image: getLayerSize(layers?.[0]),
         viewport: deck,
         padding: deck.width < 400 ? 10 : deck.width < 600 ? 30 : 50,
-        matrix: layers[0].props.modelMatrix,
+        matrix: layers?.[0]?.props.modelMatrix,
       }),
     );
   }, [layers]);
@@ -266,4 +265,37 @@ const getLayerSize = ({ props }) => {
     width = (width + spacer) * props.columns;
   }
   return { height, width, maxZoom };
+};
+
+// from vizarr utils
+const fitImageToViewport = ({
+  image,
+  viewport,
+  padding,
+  matrix = new Matrix4().identity(),
+}) => {
+  const corners = [
+    [0, 0, 0],
+    [image.width, 0, 0],
+    [image.width, image.height, 0],
+    [0, image.height, 0],
+  ].map((corner) => matrix.transformAsPoint(corner));
+
+  const minX = Math.min(...corners.map((p) => p[0]));
+  const maxX = Math.max(...corners.map((p) => p[0]));
+  const minY = Math.min(...corners.map((p) => p[1]));
+  const maxY = Math.max(...corners.map((p) => p[1]));
+
+  const availableWidth = viewport.width - 2 * padding;
+  const availableHeight = viewport.height - 2 * padding;
+
+  return {
+    zoom: Math.log2(
+      Math.min(
+        availableWidth / (maxX - minX), // scaleX
+        availableHeight / (maxY - minY), // scaleY // Fix minY
+      ),
+    ),
+    target: [(minX + maxX) / 2, (minY + maxY) / 2],
+  };
 };

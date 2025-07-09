@@ -48,10 +48,10 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           ...initLayerStateFromSource({
             id: 'raw',
             ...sourceData,
+            modelMatrix: new Matrix4().identity(),
             labels: [
               {
                 name: 'labels',
-                modelMatrix: sourceData.model_matrix,
                 loader: sourceData.loader,
               },
             ],
@@ -86,6 +86,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           on
             ? new LabelLayer({
                 ...layerState.labels[0].layerProps,
+                modelMatrix: layerState.layerProps.modelMatrix,
                 selection: layerState.labels[0].transformSourceSelection(
                   layerState.layerProps.selections[0],
                 ),
@@ -188,9 +189,10 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
 
   const translate = (x, y) => {
     setLayerState((prev) => {
-      const translatedMatrix = prev.layerProps.modelMatrix
-        .clone()
-        .translate([x, y, 0]);
+      const translatedMatrix = new Matrix4()
+        .translate([x, y, 0])
+        .multiplyRight(prev.layerProps.modelMatrix)
+        .clone();
       return {
         ...prev,
         layerProps: {

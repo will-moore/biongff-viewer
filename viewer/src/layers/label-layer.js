@@ -6,16 +6,16 @@ import { clamp, Matrix4 } from 'math.gl';
 class GrayscaleBitmapLayer extends VizarrGrayscaleBitmapLayer {
   static layerName = 'GrayscaleBitmapLayer';
 
-  getPickingInfo({ info, mode }) {
+  getPickingInfo({ info }) {
     // Get label value
     if (!info.coordinate) {
       return info;
     }
-    const { pixelData, bounds } = this.props;
+    const { pixelData, bounds, modelMatrix } = this.props;
     const { data, width, height } = pixelData;
     let [x, y] = info.coordinate;
-    if (!Matrix4.IDENTITY.equals(info.layer.props.modelMatrix)) {
-      [x, y] = info.layer.props.modelMatrix.invert().transformPoint([x, y]);
+    if (!Matrix4.IDENTITY.equals(modelMatrix)) {
+      [x, y] = modelMatrix.invert().transformPoint([x, y]);
     }
     const [left, bottom, right, top] = bounds;
 

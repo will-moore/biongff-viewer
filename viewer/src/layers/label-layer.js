@@ -1,7 +1,61 @@
 import { GrayscaleBitmapLayer as VizarrGrayscaleBitmapLayer } from '@hms-dbmi/vizarr/src/layers/label-layer';
 import * as utils from '@hms-dbmi/vizarr/src/utils';
-import { TileLayer } from 'deck.gl';
+import { _Tileset2D as Tileset2D, TileLayer } from 'deck.gl';
 import { clamp, Matrix4 } from 'math.gl';
+
+import { transformBox } from '../utils';
+
+// Extend Tileset2D to use modelMatrix in isTileVisible
+// so picking works in the transformed tiles
+class LabelTileset2D extends Tileset2D {
+  isTileVisible(tile, cullRect, modelMatrix = null) {
+    if (!tile.isVisible) {
+      return false;
+    }
+
+    if (cullRect && this._viewport) {
+      const boundsArr = this._getCullBounds({
+        viewport: this._viewport,
+        z: this._zRange,
+        cullRect,
+      });
+      let { bbox } = tile;
+      for (const [minX, minY, maxX, maxY] of boundsArr) {
+        let overlaps;
+        if ('west' in bbox) {
+          overlaps =
+            bbox.west < maxX &&
+            bbox.east > minX &&
+            bbox.south < maxY &&
+            bbox.north > minY;
+        } else {
+          if (modelMatrix && !Matrix4.IDENTITY.equals(modelMatrix)) {
+            const transformedBox = transformBox(
+              [bbox.left, bbox.top, bbox.right, bbox.bottom],
+              modelMatrix,
+            );
+            bbox = {
+              left: transformedBox[0],
+              top: transformedBox[1],
+              right: transformedBox[2],
+              bottom: transformedBox[3],
+            };
+          }
+          // top/bottom could be swapped depending on the indexing system
+          const y0 = Math.min(bbox.top, bbox.bottom);
+          const y1 = Math.max(bbox.top, bbox.bottom);
+          overlaps =
+            bbox.left < maxX && bbox.right > minX && y0 < maxY && y1 > minY;
+        }
+        if (overlaps) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+}
 
 class GrayscaleBitmapLayer extends VizarrGrayscaleBitmapLayer {
   static layerName = 'GrayscaleBitmapLayer';
@@ -70,6 +124,7 @@ export class LabelLayer extends TileLayer {
     const tileSize = getTileSizeForResolutions(resolutions);
 
     super({
+      TilesetClass: LabelTileset2D,
       id: `labels-${id}`,
       extent: [0, 0, dimensions.width, dimensions.height],
       tileSize: tileSize,
@@ -89,6 +144,7 @@ export class LabelLayer extends TileLayer {
         const resolution = resolutions[Math.round(-z)];
         const request = { x, y, signal, selection: selection };
         let { data, width, height } = await resolution.getTile(request);
+        if (signal.aborted) return null;
         utils.assert(
           !(data instanceof Float32Array) && !(data instanceof Float64Array),
           `The pixels of labels MUST be integer data types, got ${JSON.stringify(
@@ -126,6 +182,14 @@ export class LabelLayer extends TileLayer {
       image: new ImageData(data.width, data.height),
       pickable: pickable,
     });
+  }
+
+  filterSubLayer({ layer, cullRect }) {
+    const { tile } = layer.props;
+    return (
+      this.state.tileset &&
+      this.state.tileset.isTileVisible(tile, cullRect, this.props.modelMatrix)
+    );
   }
 
   updateState({ props, oldProps, changeFlags, ...rest }) {

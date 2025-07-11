@@ -91,3 +91,28 @@ export function parseXml(dom) {
   }
   return rsp;
 }
+
+// From deck.gl geo-layers tileset-2d utils
+export function transformBox(bbox, modelMatrix) {
+  const transformedCoords = [
+    // top-left
+    modelMatrix.transformAsPoint([bbox[0], bbox[1]]),
+    // top-right
+    modelMatrix.transformAsPoint([bbox[2], bbox[1]]),
+    // bottom-left
+    modelMatrix.transformAsPoint([bbox[0], bbox[3]]),
+    // bottom-right
+    modelMatrix.transformAsPoint([bbox[2], bbox[3]]),
+  ];
+  const transformedBox = [
+    // Minimum x coord
+    Math.min(...transformedCoords.map((i) => i[0])),
+    // Minimum y coord
+    Math.min(...transformedCoords.map((i) => i[1])),
+    // Max x coord
+    Math.max(...transformedCoords.map((i) => i[0])),
+    // Max y coord
+    Math.max(...transformedCoords.map((i) => i[1])),
+  ];
+  return transformedBox;
+}

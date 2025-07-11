@@ -81,6 +81,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           new MultiscaleImageLayer({
             ...layerState.layerProps,
             visible: false,
+            excludeBackground: true,
           }),
           on
             ? new LabelLayer({
@@ -97,8 +98,11 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
       return [
         new LayerStateMap[layerState.kind]({
           ...layerState.layerProps,
-          visible: on, // @TODO: fix lower resolution image visible when image is toggled off
+          visible: on,
           pickable: false,
+          ...(layerState.kind === 'multiscale'
+            ? { excludeBackground: true }
+            : {}),
         }),
         ...(layerState.labels?.length
           ? layerState.labels?.map((label) => {

@@ -1,10 +1,15 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
+import React, {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react';
 
 import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
 import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
-  fitImageToViewport,
   isGridLayerProps,
   isInterleaved,
   resolveLoaderFromLayerProps,
@@ -31,82 +36,96 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   });
 
   const { sourceData, error: sourceError } = useSourceData(config);
+  const [layerState, setLayerState] = useState(null);
 
-  const layers = useMemo(() => {
+  useEffect(() => {
     if (sourceData) {
       if (isLabel) {
         // To load standalone label, replicate in source and nest in labels
         // Needs source ImageLayer, LabelLayer has no loader
-        const layerState = initLayerStateFromSource({
+        setLayerState({
+          ...initLayerStateFromSource({
+            id: 'raw',
+            ...sourceData,
+            labels: [
+              {
+                name: 'labels',
+                loader: sourceData.loader,
+              },
+            ],
+          }),
+        });
+        return;
+      }
+      setLayerState(
+        initLayerStateFromSource({
           id: 'raw',
           ...sourceData,
-          on: false,
-          labels: [
-            {
-              name: 'labels',
-              modelMatrix: sourceData.model_matrix,
-              loader: sourceData.loader,
-            },
-          ],
-        });
+        }),
+      );
+    }
+  }, [isLabel, sourceData]);
+
+  const layers = useMemo(() => {
+    if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
+      const { on } = layerState;
+      if (isLabel) {
+        // @TODO: fix how controller lists layers
         return [
           new MultiscaleImageLayer({
             ...layerState.layerProps,
             visible: false,
+            excludeBackground: true,
           }),
-          new LabelLayer({
-            ...layerState.labels[0].layerProps,
-            selection: layerState.labels[0].transformSourceSelection(
-              layerState.layerProps.selections[0],
-            ),
-            pickable: true,
-          }),
-        ];
-      }
-      // Enforce identity matrix for labels picking to work
-      const modelMatrix = !!sourceData.labels?.length
-        ? new Matrix4().identity()
-        : sourceData.model_matrix;
-      const layerState = initLayerStateFromSource({
-        id: 'raw',
-        ...sourceData,
-        model_matrix: modelMatrix,
-      });
-      if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
-        return [
-          new LayerStateMap[layerState.kind]({
-            ...layerState.layerProps,
-            pickable: false,
-          }),
-          ...(layerState.labels?.length
-            ? layerState.labels?.map((label) => {
-                return new LabelLayer({
-                  ...label.layerProps,
-                  modelMatrix: layerState.layerProps.modelMatrix,
-                  selection: layerState.labels[0].transformSourceSelection(
-                    layerState.layerProps.selections[0],
-                  ),
-                  pickable: true,
-                });
+          on
+            ? new LabelLayer({
+                ...layerState.labels[0].layerProps,
+                modelMatrix: layerState.layerProps.modelMatrix,
+                selection: layerState.labels[0].transformSourceSelection(
+                  layerState.layerProps.selections[0],
+                ),
+                pickable: true,
               })
-            : []),
+            : null,
         ];
-      } else {
-        return [];
       }
-    } else {
-      return [];
+      return [
+        new LayerStateMap[layerState.kind]({
+          ...layerState.layerProps,
+          visible: on,
+          pickable: false,
+          ...(layerState.kind === 'multiscale'
+            ? { excludeBackground: true }
+            : {}),
+        }),
+        ...(layerState.labels?.length
+          ? layerState.labels?.map((label) => {
+              const { on: labelOn } = label;
+              return labelOn
+                ? new LabelLayer({
+                    ...label.layerProps,
+                    modelMatrix: layerState.layerProps.modelMatrix,
+                    selection: layerState.labels[0].transformSourceSelection(
+                      layerState.layerProps.selections[0],
+                    ),
+                    pickable: true,
+                  })
+                : null;
+            })
+          : []),
+      ];
     }
-  }, [isLabel, sourceData]);
+    return [];
+  }, [isLabel, layerState]);
 
   const resetViewState = useCallback(() => {
     const { deck } = deckRef.current;
     setViewState(
       fitImageToViewport({
-        image: getLayerSize(layers[0]),
+        image: getLayerSize(layers?.[0]),
         viewport: deck,
         padding: deck.width < 400 ? 10 : deck.width < 600 ? 30 : 50,
-        matrix: layers[0].props.modelMatrix,
+        matrix: layers?.[0]?.props.modelMatrix,
       }),
     );
   }, [layers]);
@@ -124,6 +143,28 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     };
   };
 
+  const toggleVisibility = (label = null) => {
+    if (!label) {
+      setLayerState((prev) => ({
+        ...prev,
+        on: !prev.on,
+      }));
+    } else {
+      setLayerState((prev) => ({
+        ...prev,
+        labels: prev.labels.map((l) => {
+          if (l.layerProps.id === label) {
+            return {
+              ...l,
+              on: !l.on,
+            };
+          }
+          return l;
+        }),
+      }));
+    }
+  };
+
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -133,7 +174,11 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
   } else {
     return (
       <div>
-        <Controller layers={layers} resetViewState={resetViewState} />
+        <Controller
+          layerState={layerState}
+          resetViewState={resetViewState}
+          toggleVisibility={toggleVisibility}
+        />
         <DeckGL
           ref={deckRef}
           layers={layers}
@@ -163,4 +208,37 @@ const getLayerSize = ({ props }) => {
     width = (width + spacer) * props.columns;
   }
   return { height, width, maxZoom };
+};
+
+// from vizarr utils
+const fitImageToViewport = ({
+  image,
+  viewport,
+  padding,
+  matrix = new Matrix4().identity(),
+}) => {
+  const corners = [
+    [0, 0, 0],
+    [image.width, 0, 0],
+    [image.width, image.height, 0],
+    [0, image.height, 0],
+  ].map((corner) => matrix.transformAsPoint(corner));
+
+  const minX = Math.min(...corners.map((p) => p[0]));
+  const maxX = Math.max(...corners.map((p) => p[0]));
+  const minY = Math.min(...corners.map((p) => p[1]));
+  const maxY = Math.max(...corners.map((p) => p[1]));
+
+  const availableWidth = viewport.width - 2 * padding;
+  const availableHeight = viewport.height - 2 * padding;
+
+  return {
+    zoom: Math.log2(
+      Math.min(
+        availableWidth / (maxX - minX), // scaleX
+        availableHeight / (maxY - minY), // scaleY // Fix minY
+      ),
+    ),
+    target: [(minX + maxX) / 2, (minY + maxY) / 2],
+  };
 };

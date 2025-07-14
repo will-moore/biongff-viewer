@@ -47,7 +47,6 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           ...initLayerStateFromSource({
             id: 'raw',
             ...sourceData,
-            modelMatrix: new Matrix4().identity(),
             labels: [
               {
                 name: 'labels',
@@ -58,15 +57,10 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
         });
         return;
       }
-      // Enforce identity matrix for labels picking to work
-      const modelMatrix = !!sourceData.labels?.length
-        ? new Matrix4().identity()
-        : sourceData.model_matrix;
       setLayerState(
         initLayerStateFromSource({
           id: 'raw',
           ...sourceData,
-          model_matrix: modelMatrix,
         }),
       );
     }
@@ -171,53 +165,6 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
     }
   };
 
-  const rotate90 = (ccw = false) => {
-    const { height, width } = getLayerSize(layers[0]);
-    const center = [width / 2, height / 2, 0];
-    setLayerState((prev) => {
-      const rotatedMatrix = prev.layerProps.modelMatrix
-        .clone()
-        .translate(center)
-        .rotateZ((Math.PI / 2) * (ccw ? -1 : 1))
-        .translate(center.map((c) => -c));
-      return {
-        ...prev,
-        layerProps: {
-          ...prev.layerProps,
-          modelMatrix: rotatedMatrix,
-        },
-      };
-    });
-  };
-
-  const translate = (x, y) => {
-    setLayerState((prev) => {
-      const translatedMatrix = new Matrix4()
-        .translate([x, y, 0])
-        .multiplyRight(prev.layerProps.modelMatrix)
-        .clone();
-      return {
-        ...prev,
-        layerProps: {
-          ...prev.layerProps,
-          modelMatrix: translatedMatrix,
-        },
-      };
-    });
-  };
-
-  const setIdentityMatrix = () => {
-    setLayerState((prev) => {
-      return {
-        ...prev,
-        layerProps: {
-          ...prev.layerProps,
-          modelMatrix: new Matrix4().identity(),
-        },
-      };
-    });
-  };
-
   if (sourceError) {
     return (
       <div className="alert alert-danger" role="alert">
@@ -231,15 +178,7 @@ export const Viewer = ({ source, channelAxis = null, isLabel = false }) => {
           layerState={layerState}
           resetViewState={resetViewState}
           toggleVisibility={toggleVisibility}
-          rotate90={rotate90}
-          translate={translate}
-          setIdentityMatrix={setIdentityMatrix}
         />
-        <div className="viewer-matrix">
-          {layers?.[0]?.props.modelMatrix
-            ? `[${layers[0].props.modelMatrix.join(', ')}]`
-            : ''}
-        </div>
         <DeckGL
           ref={deckRef}
           layers={layers}

@@ -30,16 +30,11 @@ class LabelTileset2D extends Tileset2D {
             bbox.north > minY;
         } else {
           if (modelMatrix && !Matrix4.IDENTITY.equals(modelMatrix)) {
-            const transformedBox = transformBox(
+            const [left, top, right, bottom] = transformBox(
               [bbox.left, bbox.top, bbox.right, bbox.bottom],
               modelMatrix,
             );
-            bbox = {
-              left: transformedBox[0],
-              top: transformedBox[1],
-              right: transformedBox[2],
-              bottom: transformedBox[3],
-            };
+            bbox = { left, top, right, bottom };
           }
           // top/bottom could be swapped depending on the indexing system
           const y0 = Math.min(bbox.top, bbox.bottom);

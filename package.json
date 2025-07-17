@@ -9,7 +9,7 @@
     "dev": "pnpm --filter viewer dev",
     "lint": "pnpm --filter viewer lint",
     "lint:fix": "pnpm --filter viewer lint:fix",
-    "build": "pnpm --filter viewer build"
+    "build": "pnpm --filter viewer build --outDir ../dist"
   },
   "browserslist": {
     "production": [

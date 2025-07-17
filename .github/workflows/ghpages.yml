@@ -27,4 +27,4 @@ jobs:
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages
-          FOLDER: gh_pages
+          FOLDER: dist

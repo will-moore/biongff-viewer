@@ -6,6 +6,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Install and Build 🔧
         run: |
           pnpm install

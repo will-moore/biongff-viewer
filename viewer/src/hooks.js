@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { createSourceData } from '@hms-dbmi/vizarr/src/io';
 import {
   isBioformats2rawlayout,
+  isMultiscales,
+  coordinateTransformationsToMatrix,
   guessZarrVersion,
   isOmePlate,
 } from '@hms-dbmi/vizarr/src/utils';
@@ -10,6 +12,7 @@ import { FetchStore, open } from 'zarrita';
 
 import {
   findSeries,
+  getNgffAxes,
   getXmlDom,
   getZarrJson,
   getZarrMetadata,
@@ -17,6 +20,27 @@ import {
   parseXml,
   resolveOmeLabelsFromMultiscales,
 } from './utils';
+
+const getPhysicalSizes = (attrs) => {
+  if (isMultiscales(attrs)) {
+    const axes = getNgffAxes(attrs.multiscales);
+    const ct = coordinateTransformationsToMatrix(attrs.multiscales);
+    const matrixIndices = {
+      x: 0,
+      y: 5,
+      z: 10,
+    };
+    const physicalSizes = axes
+      .filter((a) => a.type === 'space')
+      .reduce((acc, a) => {
+        acc[a.name] = { size: ct[matrixIndices[a.name]], unit: a.unit };
+        return acc;
+      }, {});
+    // @TODO: get t size from multiscales.coordinateTransformations if axis is present
+    return physicalSizes;
+  }
+  return null;
+};
 
 const fetchSourceData = async (config) => {
   try {
@@ -40,17 +64,25 @@ const fetchSourceData = async (config) => {
     ) {
       // use Vizarr's createSourceData with source as is
 
-      if (ome?.version === "0.5") {
-        const sourceData = await createSourceData(config);
+      let sourceData;
+      if (ome?.version === '0.5') {
+        sourceData = await createSourceData(config);
         const labels = await resolveOmeLabelsFromMultiscales(node);
         sourceData.labels = await Promise.all(
           labels.map((name) => loadOmeImageLabel(node.resolve('labels'), name)),
         );
-        return [sourceData];
+      } else {
+        sourceData = await createSourceData(config);
       }
-      return [await createSourceData(config)];
+      const physicalSizes = getPhysicalSizes(ome || node.attrs);
+      if (physicalSizes) {
+        sourceData.loader[0].meta = {
+          ...sourceData.loader[0].meta,
+          physicalSizes,
+        };
+      }
+      return [sourceData];
     }
-
     // load bioformats2raw.layout
     // https://ngff.openmicroscopy.org/0.4/#bf2raw
 
@@ -97,6 +129,7 @@ const fetchSourceData = async (config) => {
       }
     }
 
+    // @TODO: get physicalSizes
     const seriesMd = await Promise.all(
       series?.map(async (s, index) => {
         const seriesNode = await open(node.resolve(s), {
@@ -119,16 +152,17 @@ const fetchSourceData = async (config) => {
     );
 
     // return all series
-    let promises = series.map((s, sIndex) => {
-      const seriesUrl = `${base.replace(/\/?$/, '/')}${s}`;
-      return createSourceData({
-        ...config,
-        source: seriesUrl,
-        ...seriesMd[sIndex],
-      });
-    });
-    return await Promise.all(promises);
-
+    const seriesData = await Promise.all(
+      series.map((s, sIndex) => {
+        const seriesUrl = `${base.replace(/\/?$/, '/')}${series?.[sIndex] || ''}`;
+        return createSourceData({
+          ...config,
+          source: seriesUrl,
+          ...seriesMd[sIndex],
+        });
+      }),
+    );
+    return seriesData;
   } catch (err) {
     throw err;
   }

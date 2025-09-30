@@ -6,7 +6,7 @@ import React, {
   useMemo,
 } from 'react';
 
-import { ImageLayer, MultiscaleImageLayer } from '@hms-dbmi/viv';
+import { ImageLayer, MultiscaleImageLayer, ScaleBarLayer } from '@hms-dbmi/viv';
 import { initLayerStateFromSource } from '@hms-dbmi/vizarr/src/io';
 import { GridLayer } from '@hms-dbmi/vizarr/src/layers/grid-layer';
 import {
@@ -19,7 +19,7 @@ import DeckGL, { OrthographicView } from 'deck.gl';
 import { Matrix4 } from 'math.gl';
 
 import { useSourceData } from '../hooks';
-import { Controller } from './Controller';
+import { Controller } from './Controller/Controller';
 import { LabelLayer } from '../layers/label-layer';
 
 const LayerStateMap = {
@@ -33,6 +33,7 @@ export const Viewer = ({
   channelAxis = null,
   isLabel = null,
   modelMatrices = null,
+  colors = null,
 }) => {
   const deckRef = useRef(null);
   const [viewState, setViewState] = useState(null);
@@ -90,7 +91,6 @@ export const Viewer = ({
         if (layerState?.layerProps?.loader || layerState?.layerProps?.loaders) {
           const { on } = layerState;
           if (isLabel?.[index]) {
-            // @TODO: fix how controller lists layers
             return [
               new MultiscaleImageLayer({
                 ...layerState.layerProps,
@@ -105,6 +105,8 @@ export const Viewer = ({
                       layerState.layerProps.selections[0],
                     ),
                     pickable: true,
+                    colors:
+                      colors?.[index] || layerState.labels[0].layerProps.colors,
                   })
                 : null,
             ];
@@ -130,6 +132,7 @@ export const Viewer = ({
                             layerState.layerProps.selections[0],
                           ),
                         pickable: true,
+                        colors: colors?.[index] || label.layerProps.colors,
                       })
                     : null;
                 })
@@ -139,18 +142,37 @@ export const Viewer = ({
         return [];
       })
       .flat();
-  }, [isLabel, layerStates]);
+  }, [colors, isLabel, layerStates]);
+
+  const deckLayers = useMemo(() => {
+    if (sourceData.length > 1 || !layers.length || !viewState) {
+      return layers;
+    }
+    if (layers[0].props.loader?.[0]?.meta?.physicalSizes?.x) {
+      const { size, unit } = layers[0].props.loader[0].meta.physicalSizes.x;
+      const scalebar = new ScaleBarLayer({
+        id: 'scalebar',
+        size: size / layers[0].props.modelMatrix[0],
+        unit: unit,
+        viewState: viewState,
+      });
+      return [...layers, scalebar];
+    }
+    return layers;
+  }, [layers, sourceData.length, viewState]);
 
   const resetViewState = useCallback(() => {
     const { deck } = deckRef.current;
-    setViewState(
-      fitImageToViewport({
+    setViewState({
+      ...fitImageToViewport({
         image: getLayerSize(layers?.[0]),
         viewport: deck,
         padding: deck.width < 400 ? 10 : deck.width < 600 ? 30 : 50,
         matrix: layers?.[0]?.props.modelMatrix,
       }),
-    );
+      width: deck.width,
+      height: deck.height,
+    });
   }, [layers]);
 
   useEffect(() => {
@@ -159,12 +181,15 @@ export const Viewer = ({
     }
   }, [layers, resetViewState, viewState]);
 
-  const getTooltip = ({ layer, index, value }) => {
+  const getTooltip = ({ layer, index, label, value }) => {
     if (!layer || !index) {
       return null;
     }
     return {
-      text: value,
+      text:
+        value !== null && value !== undefined
+          ? `${label}: ${value}`
+          : `${label}`,
     };
   };
 
@@ -234,6 +259,58 @@ export const Viewer = ({
     }
   };
 
+  const setLayerSelections = (index, selections) => {
+    setLayerStates((prev) => {
+      return prev.map((state, i) => {
+        if (i !== index) return state;
+        return {
+          ...state,
+          layerProps: {
+            ...state.layerProps,
+            selections: selections,
+          },
+        };
+      });
+    });
+  };
+
+  const toggleChannelVisibility = (index, channelIndex) => {
+    setLayerStates((prev) => {
+      return prev.map((state, i) => {
+        if (i !== index) return state;
+        return {
+          ...state,
+          layerProps: {
+            ...state.layerProps,
+            channelsVisible: state.layerProps.channelsVisible.map(
+              (visible, j) => {
+                if (j !== channelIndex) return visible;
+                return !visible;
+              },
+            ),
+          },
+        };
+      });
+    });
+  };
+
+  const setChannelContrast = (index, channelIndex, contrastLimits) => {
+    setLayerStates((prev) => {
+      return prev.map((state, i) => {
+        if (i !== index) return state;
+        return {
+          ...state,
+          layerProps: {
+            ...state.layerProps,
+            contrastLimits: state.layerProps.contrastLimits.map((cl, j) => {
+              if (j !== channelIndex) return cl;
+              return contrastLimits;
+            }),
+          },
+        };
+      });
+    });
+  };
   const { near, far } = useMemo(() => {
     if (!layers?.length) {
       return { near: 0.1, far: 1000 };
@@ -279,14 +356,19 @@ export const Viewer = ({
   return (
     <div>
       <Controller
+        sourceData={sourceData}
         layerStates={layerStates}
+        isLabel={isLabel}
         resetViewState={resetViewState}
         toggleVisibility={toggleVisibility}
         setLayerOpacity={setLayerOpacity}
+        setLayerSelections={setLayerSelections}
+        toggleChannelVisibility={toggleChannelVisibility}
+        setChannelContrast={setChannelContrast}
       />
       <DeckGL
         ref={deckRef}
-        layers={layers}
+        layers={deckLayers}
         viewState={viewState && { ortho: viewState }}
         onViewStateChange={(e) => setViewState(e.viewState)}
         views={[
